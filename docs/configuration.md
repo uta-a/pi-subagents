@@ -395,6 +395,14 @@ Controls the under-editor widget for active background runs. It defaults to `tru
 
 Starts each newly mounted under-editor async widget in its one-line folded state. It defaults to `false`. A header click still toggles the widget, and the folded state still resets when the widget is removed or Pi reloads.
 
+## `asyncWidgetPlacement`
+
+```json
+{ "asyncWidgetPlacement": "aboveEditor" }
+```
+
+Places the async runs widget below the editor (`"belowEditor"`, the default) or above it (`"aboveEditor"`).
+
 ## `asyncWidgetLayout`
 
 ```json

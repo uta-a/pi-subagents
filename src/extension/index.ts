@@ -482,6 +482,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		widgetCollapsed: asyncWidgetCollapsed,
 		widgetLayout: asyncWidgetLayout,
 		widgetStyle: displayStyle,
+		widgetPlacement: resolveFleetViewPlacement(config.asyncWidgetPlacement),
 		onJobTerminal: (job) => {
 			holdOwedResult(job);
 			refreshResultDelivery();

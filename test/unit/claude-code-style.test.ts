@@ -302,6 +302,18 @@ describe("claude-code async widget", () => {
 		assert.equal(ccWidgetFoldedLine(entries, plainTheme, true), "⏺ 2 background agents · 2 running");
 	});
 
+	it("mounts below the editor unless placed above", () => {
+		const placements: unknown[] = [];
+		const ctx = { hasUI: true, mode: "tui", ui: { getToolsExpanded: () => false, setWidget: (_key: string, factory: unknown, options?: { placement?: string }) => { if (factory) placements.push(options?.placement); } } };
+		const jobs: AsyncJobState[] = [{ asyncId: "run-p", asyncDir: "/tmp/run-p", status: "running", mode: "single", agents: ["scout"] }];
+		renderWidget(ctx as never, []);
+		renderWidget(ctx as never, jobs, false, "adaptive", "claude-code");
+		renderWidget(ctx as never, []);
+		renderWidget(ctx as never, jobs, false, "adaptive", "claude-code", "aboveEditor");
+		renderWidget(ctx as never, []);
+		assert.deepEqual(placements, ["belowEditor", "aboveEditor"]);
+	});
+
 	it("mounts through renderWidget in the claude-code style", () => {
 		let widget: { render(width: number): string[] } | undefined;
 		const ctx = {
