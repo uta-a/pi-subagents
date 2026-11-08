@@ -272,6 +272,12 @@ Package skill content.
 		writeFile(configPath, JSON.stringify({ asyncWidgetLayout: "compact" }));
 		assert.deepEqual(loadConfig(), {});
 		assert.throws(() => updateConfig((config) => config), /config\.asyncWidgetLayout must be "adaptive" or "rows"/);
+		for (const displayStyle of ["claude-code", "classic"]) {
+			writeFile(configPath, JSON.stringify({ displayStyle }));
+			assert.equal(loadConfig().displayStyle, displayStyle);
+		}
+		writeFile(configPath, JSON.stringify({ displayStyle: "fancy" }));
+		assert.throws(() => updateConfig((config) => config), /config\.displayStyle must be "claude-code" or "classic"/);
 		writeFile(configPath, JSON.stringify({ programStatus: false }));
 		assert.equal(loadConfig().programStatus, false);
 		writeFile(configPath, JSON.stringify({ programStatus: "off" }));

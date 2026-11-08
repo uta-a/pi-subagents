@@ -196,6 +196,9 @@ function validateConfig(config: Record<string, unknown>): void {
 	if (config.asyncWidgetLayout !== undefined && config.asyncWidgetLayout !== "adaptive" && config.asyncWidgetLayout !== "rows") {
 		throw new Error('config.asyncWidgetLayout must be "adaptive" or "rows"');
 	}
+	if (config.displayStyle !== undefined && config.displayStyle !== "claude-code" && config.displayStyle !== "classic") {
+		throw new Error('config.displayStyle must be "claude-code" or "classic"');
+	}
 	if (config.programStatus !== undefined && typeof config.programStatus !== "boolean") {
 		throw new Error("config.programStatus must be a boolean");
 	}

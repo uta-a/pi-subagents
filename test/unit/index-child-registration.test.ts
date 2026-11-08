@@ -18,6 +18,15 @@ function parentToolEnv(agentDir?: string): NodeJS.ProcessEnv {
 	return env;
 }
 
+/** An agent dir whose config selects the classic display, for tests of the classic renderers. */
+function classicDisplayEnv(): NodeJS.ProcessEnv {
+	const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagents-classic-display-"));
+	const configDir = path.join(agentDir, "extensions", "subagent");
+	fs.mkdirSync(configDir, { recursive: true });
+	fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ displayStyle: "classic" }), "utf-8");
+	return parentToolEnv(agentDir);
+}
+
 describe("subagent extension child mode", () => {
 	it("collapses tool detail before direct subagent tool execution", () => {
 		const script = String.raw`
@@ -93,7 +102,7 @@ describe("subagent extension child mode", () => {
 			const expected = ["subagent workflow (reply block) [async]", "subagent workflow ./ci/sweep.js", "subagent workflow review"];
 			if (JSON.stringify(rows) !== JSON.stringify(expected)) throw new Error("expected " + JSON.stringify(expected) + ", got " + JSON.stringify(rows));
 		`;
-		execFileSync(process.execPath, ["--experimental-strip-types", "--import", "./test/support/register-loader.mjs", "--input-type=module", "--eval", script], { cwd: projectRoot, env: parentToolEnv(), stdio: "pipe" });
+		execFileSync(process.execPath, ["--experimental-strip-types", "--import", "./test/support/register-loader.mjs", "--input-type=module", "--eval", script], { cwd: projectRoot, env: classicDisplayEnv(), stdio: "pipe" });
 	});
 
 	it("rejects model-sent workflowScript and workflowScriptPath on parent and fanout tools before execution", () => {
@@ -165,7 +174,7 @@ describe("subagent extension child mode", () => {
 				"--eval",
 				script,
 			],
-			{ cwd: projectRoot, env: parentToolEnv(), stdio: "pipe" },
+			{ cwd: projectRoot, env: classicDisplayEnv(), stdio: "pipe" },
 		);
 	});
 
@@ -249,7 +258,7 @@ describe("subagent extension child mode", () => {
 				"--eval",
 				script,
 			],
-			{ cwd: projectRoot, env: parentToolEnv(), stdio: "pipe" },
+			{ cwd: projectRoot, env: classicDisplayEnv(), stdio: "pipe" },
 		);
 	});
 
@@ -340,7 +349,7 @@ describe("subagent extension child mode", () => {
 		try {
 			const configDir = path.join(agentDir, "extensions", "subagent");
 			fs.mkdirSync(configDir, { recursive: true });
-			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ mainWindowRenderer: { horizontalSpacing: 0 } }), "utf-8");
+			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ displayStyle: "classic", mainWindowRenderer: { horizontalSpacing: 0 } }), "utf-8");
 
 			const script = String.raw`
 				import registerSubagentExtension from "./index.ts";
@@ -721,7 +730,7 @@ describe("subagent extension child mode", () => {
 		try {
 			const configDir = path.join(agentDir, "extensions", "subagent");
 			fs.mkdirSync(configDir, { recursive: true });
-			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ asyncWidgetCollapsed: true, asyncWidgetLayout: "rows" }), "utf-8");
+			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ displayStyle: "classic", asyncWidgetCollapsed: true, asyncWidgetLayout: "rows" }), "utf-8");
 			const script = String.raw`
 				import registerSubagentExtension from "./index.ts";
 				const eventHandlers = new Map();
@@ -1698,7 +1707,7 @@ describe("subagent extension child mode", () => {
 		const output = JSON.parse(execFileSync(
 			process.execPath,
 			["--experimental-strip-types", "--import", "./test/support/register-loader.mjs", "--input-type=module", "--eval", script],
-			{ cwd: projectRoot, env: parentToolEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+			{ cwd: projectRoot, env: classicDisplayEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
 		).trim().split("\n").at(-1)!) as { messageTypes: string[]; entryTypes: string[]; blocks: { messages: Array<[string, string[]]>; entries: Array<[string, string[]]> } };
 
 		assert.deepEqual(output.messageTypes, [

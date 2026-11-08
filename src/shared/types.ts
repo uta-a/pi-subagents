@@ -2671,6 +2671,8 @@ export type ToolDescriptionMode = "full" | "compact" | "custom";
 export type ToolActivationMode = "auto" | "dynamic" | "eager";
 export type InlineToolDisplay = "rich" | "summary";
 
+export type DisplayStyle = "claude-code" | "classic";
+
 export interface ScheduledRunsConfig {
 	enabled?: boolean;
 	maxPending?: number;
@@ -2765,6 +2767,8 @@ export interface ExtensionConfig {
 	enableSlashCommands?: boolean;
 	/** Opt-in feature groups removed from the subagent tool schema and rejected at every execution boundary. */
 	disabledFeatures?: SubagentFeature[];
+	/** Look of the subagent tool row, chat notices, and async widget. Defaults to claude-code. */
+	displayStyle?: DisplayStyle;
 	/** Inline chat rendering for the subagent tool. Defaults to rich. */
 	inlineToolDisplay?: InlineToolDisplay;
 	/** Density controls for the main chat subagent call/result renderer. */
