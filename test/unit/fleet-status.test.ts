@@ -358,7 +358,8 @@ describe("below-editor subagent FleetView", () => {
 				theme,
 			},
 		} as unknown as ExtensionContext;
-		const fleet = new SubagentFleetStatus(state, () => {}, { refreshMs: 60_000 });
+		const rosterStates: boolean[] = [];
+		const fleet = new SubagentFleetStatus(state, () => {}, { refreshMs: 60_000, onRosterActiveChange: (_ui, active) => rosterStates.push(active) });
 		try {
 			fleet.setContext(ctx);
 			assert.ok(widgetFactory);
@@ -384,7 +385,9 @@ describe("below-editor subagent FleetView", () => {
 			assert.match(component.render(80)[0]!, /Async runs 0\/4/);
 			state.activeAsyncCapacity = { used: 2, limit: 4 };
 
+			assert.deepEqual(rosterStates, []);
 			assert.deepEqual(fleet.handleKey("\x1b[B"), { consume: true });
+			assert.deepEqual(rosterStates, [true], "Down reports the roster as open");
 			const expandedLines = component.render(80);
 			assert.ok(expandedLines.some((line) => line.includes("> main")));
 			assert.ok(expandedLines.some((line) => line.includes("  worker-0")), "unselected agents use blank focus space");
@@ -398,9 +401,11 @@ describe("below-editor subagent FleetView", () => {
 			assert.equal(component.render(80).length, 1);
 			assert.deepEqual(fleet.handleKey("\x1b[D"), { consume: true });
 			assert.ok(component.render(80).length > 1, "Left should also expand the roster");
+			assert.deepEqual(rosterStates, [true, false, true], "Escape reports the roster as closed");
 		} finally {
 			fleet.dispose();
 		}
+		assert.deepEqual(rosterStates, [true, false, true, false], "dispose reports the roster as closed");
 	});
 
 	it("keeps common FleetView agent identities on distinct theme colors", () => {
