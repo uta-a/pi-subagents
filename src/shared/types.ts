@@ -2747,6 +2747,8 @@ export interface ExtensionConfig {
 	asyncWidget?: boolean;
 	/** Start the under-editor async runs widget folded. Defaults to false. */
 	asyncWidgetCollapsed?: boolean;
+	/** Place the async runs widget above or below the editor. Defaults to belowEditor. */
+	asyncWidgetPlacement?: FleetViewPlacement;
 	/** Unfolded async runs widget layout: "adaptive" fits run details to the terminal height, "rows" shows one line per run. Defaults to "adaptive". */
 	asyncWidgetLayout?: AsyncWidgetLayout;
 	/** Report subagent run state to the terminal with OSC 7501. Defaults to true. */

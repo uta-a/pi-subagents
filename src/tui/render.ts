@@ -12,6 +12,7 @@ import {
 	type AsyncWidgetLayout,
 	type Details,
 	type DisplayStyle,
+	type FleetViewPlacement,
 	type HostStepState,
 	type HostStepVerdict,
 	type NestedRunSummary,
@@ -3294,7 +3295,7 @@ export function buildWidgetLines(jobs: AsyncJobState[], theme: Theme, width = ge
 	return buildWidgetLinesWithProjection(roots, theme, width, expanded, frame, projectionFor);
 }
 
-export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initiallyCollapsed = false, layout: AsyncWidgetLayout = "adaptive", style: DisplayStyle = "classic"): void {
+export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initiallyCollapsed = false, layout: AsyncWidgetLayout = "adaptive", style: DisplayStyle = "classic", placement: FleetViewPlacement = "belowEditor"): void {
 	// Advance round tracking on every widget update, including the empty-jobs
 	// cleanup path below, which never reaches container.render.
 	trackSubagentsRound(ctx.ui, jobs, Date.now());
@@ -3306,14 +3307,14 @@ export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initi
 	}
 	if (!ctx.hasUI) return;
 	if ((ctx as { mode?: string }).mode === "rpc") {
-		ctx.ui.setWidget(WIDGET_KEY, encodeAsyncStatusSnapshotWidget(jobs));
+		ctx.ui.setWidget(WIDGET_KEY, encodeAsyncStatusSnapshotWidget(jobs), { placement });
 		return;
 	}
 	// Pi replaces a widget by deleting and reinserting its key. Update the mounted
 	// component instead so progress cannot move it past other extensions' widgets.
 	const update = asyncWidgetUpdates.get(ctx.ui);
 	if (update) update(jobs);
-	else ctx.ui.setWidget(WIDGET_KEY, buildWidgetComponent(jobs, ctx.ui, initiallyCollapsed, layout, style));
+	else ctx.ui.setWidget(WIDGET_KEY, buildWidgetComponent(jobs, ctx.ui, initiallyCollapsed, layout, style), { placement });
 }
 
 function renderSingleCompact(

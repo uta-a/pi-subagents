@@ -5,6 +5,7 @@
 ### Changed
 
 - pi-subagents now looks like Claude Code by default. The `subagent` tool row shows `⏺ agent(task)`, the latest tool uses under `⎿`, and `Done (N tool uses · tokens · time)` when finished. Parallel runs and workflows draw a `├─` tree with one branch per child. Chat notices and the async widget follow the same style. Set `displayStyle: "classic"` to keep the previous look. Only rendering changes.
+- The async runs widget now shows below the chat input. Set `asyncWidgetPlacement: "aboveEditor"` to put it back above.
 
 ### Fixed
 

@@ -196,6 +196,9 @@ function validateConfig(config: Record<string, unknown>): void {
 	if (config.asyncWidgetLayout !== undefined && config.asyncWidgetLayout !== "adaptive" && config.asyncWidgetLayout !== "rows") {
 		throw new Error('config.asyncWidgetLayout must be "adaptive" or "rows"');
 	}
+	if (config.asyncWidgetPlacement !== undefined && config.asyncWidgetPlacement !== "aboveEditor" && config.asyncWidgetPlacement !== "belowEditor") {
+		throw new Error('config.asyncWidgetPlacement must be "aboveEditor" or "belowEditor"');
+	}
 	if (config.displayStyle !== undefined && config.displayStyle !== "claude-code" && config.displayStyle !== "classic") {
 		throw new Error('config.displayStyle must be "claude-code" or "classic"');
 	}
