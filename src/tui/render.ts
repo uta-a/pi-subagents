@@ -11,6 +11,7 @@ import {
 	type AsyncParallelGroupStatus,
 	type AsyncWidgetLayout,
 	type Details,
+	type DisplayStyle,
 	type HostStepState,
 	type HostStepVerdict,
 	type NestedRunSummary,
@@ -32,6 +33,7 @@ import { aggregateStepStatus, formatActivityLabel, formatAgentRunningLabel, form
 import { contextModeBadge, contextModePrefix } from "../runs/shared/context-mode.ts";
 import { shouldSuppressSingleStep, stripRepeatedAgentPrefix, withDuplicateLabelDiscriminators } from "./render-helpers.ts";
 import { runningTone } from "./running-tone.ts";
+import { ccToolName, ccWidgetFoldedLine, ccWidgetLines, oneLine as ccOneLine, type ChildState, type WidgetEntry } from "./claude-code-style.ts";
 import { childThinkingLevel, type ThinkingLevel } from "../shared/model-info.ts";
 import { buildWorkflowChatProgressRows, type WorkflowChatProgressRow } from "../workflows/chat-progress.ts";
 import { formatWorkflowPreflight, formatWorkflowPreflightPlanSummary, formatWorkflowPreflightWarningSummary, formatWorkflowPreflightWarnings } from "../workflows/workflow-preflight.ts";
@@ -3005,7 +3007,71 @@ function materializedWidgetChildLines(job: AsyncJobState, theme: Theme, width: n
 	return lines;
 }
 
-function buildWidgetComponent(jobs: AsyncJobState[], ui: ExtensionContext["ui"], initiallyCollapsed = false, layout: AsyncWidgetLayout): (tui: { requestRender(): void }, theme: Theme) => Component {
+const CC_JOB_STATES = new Map<string, ChildState>([
+	["queued", "pending"],
+	["pending", "pending"],
+	["running", "running"],
+	["complete", "completed"],
+	["completed", "completed"],
+	["failed", "failed"],
+	["partial", "failed"],
+	["rejected", "failed"],
+	["paused", "paused"],
+	["stopped", "stopped"],
+]);
+
+function ccActivity(tool: string | undefined, args: string | undefined, currentPath: string | undefined): WidgetEntry["activity"] {
+	if (!tool) return undefined;
+	return { name: ccToolName(tool), detail: ccOneLine(args ?? (currentPath ? shortenPath(currentPath) : ""), 120) };
+}
+
+function ccStepEntry(step: AsyncJobStep): WidgetEntry {
+	const state = CC_JOB_STATES.get(step.status) ?? "pending";
+	return {
+		name: step.agent || "agent",
+		desc: stepTaskSummary(step, step.agent),
+		state,
+		toolCount: step.toolCount ?? 0,
+		tokens: step.tokens?.total ?? 0,
+		durationMs: step.durationMs ?? 0,
+		activity: state === "running" ? ccActivity(step.currentTool, step.currentToolArgs, step.currentPath) : undefined,
+		error: step.error,
+		children: [],
+	};
+}
+
+/** A widget root (and its materialized workflow children, one level deep) for the Claude Code style. */
+function ccWidgetEntry(job: AsyncJobState, projectionFor: WorkflowWidgetProjectionLookup, now: number, depth = 0): WidgetEntry {
+	const projection = projectionFor(job);
+	const state = CC_JOB_STATES.get(job.status) ?? "pending";
+	const steps = projection.steps.filter((step) => !projection.materializedKeys?.has(step.workflowKey ?? "") && !projection.materializedKeys?.has(step.runId ?? ""));
+	const multi = job.mode !== "single" || steps.length > 1;
+	const single = multi ? undefined : steps[0];
+	const children = depth === 0 && projection.children?.length
+		? orderedWidgetJobs(projection.children).map((child) => ccWidgetEntry(child, projectionFor, now, depth + 1))
+		: [];
+	if (multi) children.push(...steps.map(ccStepEntry));
+	const name = job.mode === "workflow" ? (job.workflowKey ?? "Workflow")
+		: job.mode === "chain" ? "Chain"
+			: job.mode === "parallel" ? "Agents"
+				: (job.agents?.[0] ?? single?.agent ?? "agent");
+	const end = state === "running" ? now : (job.updatedAt ?? now);
+	return {
+		name,
+		desc: job.description ?? (single ? stepTaskSummary(single, single.agent) : undefined),
+		state,
+		toolCount: job.toolCount ?? single?.toolCount ?? 0,
+		tokens: job.totalTokens?.total ?? single?.tokens?.total ?? 0,
+		durationMs: job.startedAt !== undefined ? Math.max(0, end - job.startedAt) : 0,
+		activity: state === "running"
+			? ccActivity(job.currentTool ?? single?.currentTool, single?.currentToolArgs, job.currentPath ?? single?.currentPath)
+			: undefined,
+		error: single?.error,
+		children,
+	};
+}
+
+function buildWidgetComponent(jobs: AsyncJobState[], ui: ExtensionContext["ui"], initiallyCollapsed = false, layout: AsyncWidgetLayout, style: DisplayStyle = "classic"): (tui: { requestRender(): void }, theme: Theme) => Component {
 	return (tui, theme) => {
 		const container = new Container();
 		let cachedRenderWidth: number | undefined;
@@ -3049,6 +3115,21 @@ function buildWidgetComponent(jobs: AsyncJobState[], ui: ExtensionContext["ui"],
 			const frame = Math.floor(now / WIDGET_ANIMATION_INTERVAL_MS);
 			trackSubagentsRound(ui, jobs, now);
 			const expanded = ui.getToolsExpanded?.() ?? false;
+			if (style === "claude-code") {
+				if (cachedLines && cachedRenderWidth === renderWidth && cachedFrame === frame && cachedExpanded === expanded) return cachedLines;
+				const { roots, projectionFor } = widgetJobTree(jobs, now);
+				const entries = orderedWidgetJobs(roots).map((job) => ccWidgetEntry(job, projectionFor, now));
+				const blink = frame % 2 === 0;
+				const width = Math.max(0, renderWidth - 2);
+				cachedRenderWidth = renderWidth;
+				cachedFrame = frame;
+				cachedExpanded = expanded;
+				cachedLines = (collapsed
+					? [ccWidgetFoldedLine(entries, theme, blink)]
+					: fitWidgetLineBudget(ccWidgetLines(entries, theme, expanded, blink, MAX_WIDGET_JOBS), theme, width, expanded)
+				).map((line) => paddedWidgetLine(line, renderWidth));
+				return cachedLines;
+			}
 			const coverage = inlineWorkflowCoverage.get(ui);
 			const covered = new Set<string>();
 			if (coverage?.size) {
@@ -3213,7 +3294,7 @@ export function buildWidgetLines(jobs: AsyncJobState[], theme: Theme, width = ge
 	return buildWidgetLinesWithProjection(roots, theme, width, expanded, frame, projectionFor);
 }
 
-export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initiallyCollapsed = false, layout: AsyncWidgetLayout = "adaptive"): void {
+export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initiallyCollapsed = false, layout: AsyncWidgetLayout = "adaptive", style: DisplayStyle = "classic"): void {
 	// Advance round tracking on every widget update, including the empty-jobs
 	// cleanup path below, which never reaches container.render.
 	trackSubagentsRound(ctx.ui, jobs, Date.now());
@@ -3232,7 +3313,7 @@ export function renderWidget(ctx: ExtensionContext, jobs: AsyncJobState[], initi
 	// component instead so progress cannot move it past other extensions' widgets.
 	const update = asyncWidgetUpdates.get(ctx.ui);
 	if (update) update(jobs);
-	else ctx.ui.setWidget(WIDGET_KEY, buildWidgetComponent(jobs, ctx.ui, initiallyCollapsed, layout));
+	else ctx.ui.setWidget(WIDGET_KEY, buildWidgetComponent(jobs, ctx.ui, initiallyCollapsed, layout, style));
 }
 
 function renderSingleCompact(

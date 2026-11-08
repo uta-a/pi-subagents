@@ -169,6 +169,33 @@ A top-level `task` is the original request. Tasks can use three placeholders:
 
 `tasks` items can only use `{task}`. Placeholders are replaced in one pass, so placeholder text inside an output is not replaced again. Other brace text stays as written. `chain` and `tasks` exclude each other, `agent`, and `action`. Steps accept only the fields above, and inputs are limited to 64 items and 16 KiB. Top-level child options such as `model`, `skill`, `output`, and `worktree` apply to every child. If a child fails, the run fails: a chain stops after the failed step or group, `tasks` fails once every child has settled, and the error names each failed child. The results of the children that already finished are still returned. Without this setting, `chain` and `tasks` are rejected as removed legacy inputs.
 
+## `displayStyle`
+
+```json
+{ "displayStyle": "classic" }
+```
+
+Chooses how pi-subagents looks in the main chat. The default, `"claude-code"`, draws like Claude Code's Agent tool and background tasks:
+
+```text
+⏺ scout(Find where the auth handlers are registered)
+  ⎿  Read(src/auth/index.ts)
+     Search(pattern: "registerAuth")
+     +5 more tool uses (ctrl+o to expand)
+
+⏺ Running 2 agents… (ctrl+o to expand)
+   ├─ scout (Map the repository layout) · 5 tool uses · 9.0k tokens
+   │  ⎿  Done
+   └─ worker (Fix the flaky test)
+      ⎿  Waiting…
+```
+
+- The `subagent` tool row has no background box. Its dot blinks while the run is live and turns green or red when it ends. Collapsed, the row shows the latest tool uses while running, then `Done (N tool uses · tokens · time)`. Pi's expand key shows the prompt, every tool use, the response, and the final status. Parallel runs, chains, and workflows draw one `├─` branch per child. Background launches show `Backgrounded agent · <run id>`.
+- Chat notices such as completions and supervisor requests show as a `⏺ headline` row, with the body under `⎿` when expanded.
+- The under-editor async widget shows one `⏺ agent(task) · stats` row per run, its current tool under `⎿`, and a `├─` row per workflow or parallel child.
+
+`"classic"` keeps the earlier boxed rows, `[subagent]` blocks, and widget. Either way, only rendering changes: execution, result content, and what the model reads are the same. An explicit `inlineToolDisplay: "summary"` keeps its one-row tool result in both styles.
+
 ## `inlineToolDisplay`
 
 ```json

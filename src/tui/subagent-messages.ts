@@ -9,6 +9,8 @@ import { formatWatchdogWarningRenderText, stateLabels } from "../watchdog/render
 import { SUBAGENT_WATCHDOG_WARNING_TYPE, WATCHDOG_WARNING_IMPORTANCES, WATCHDOG_WARNING_SEVERITIES, type WatchdogWarning } from "../watchdog/types.ts";
 import { normalizeWatchdogWarningDetails } from "../watchdog/warning-format.ts";
 import { waitToolName } from "../shared/wait-tool-name.ts";
+import type { DisplayStyle } from "../shared/types.ts";
+import { BLACK_CIRCLE } from "./claude-code-style.ts";
 
 interface SubagentMessage {
 	customType: string;
@@ -253,19 +255,45 @@ function headlineText(headline: Headline, theme: Theme): string {
  */
 const clickedBlocks = new WeakMap<SubagentMessage | SubagentEntry, { expandedByPi: boolean; expanded: boolean }>();
 
-/** The block Pi draws for its own [skill] and [compaction] messages. */
+/** Dot color of a Claude Code style notice: its first status word's tone, else its kind's. */
+function headlineDotColor(view: BlockView): ThemeColor {
+	for (const part of view.headline) {
+		// SAFETY: a headline part is a string or { status }; a string has no `status` property.
+		const tone = STATUS_TONES.get((part as { status?: string }).status ?? "");
+		if (tone) return tone;
+	}
+	return view.kind === "reply" ? "dim" : view.kind === "result" ? "success" : "warning";
+}
+
+/** Prefixes `⎿` on a body's first row and its indent on the rest, as Claude Code does for tool output. */
+function resultGutter(body: Component, theme: Theme): Component {
+	const lead = theme.fg("dim", "  ⎿  ");
+	const indent = "     ";
+	return {
+		render: (width) => body.render(Math.max(10, width - indent.length)).map((line, i) => `${i === 0 ? lead : indent}${line}`),
+		invalidate: () => body.invalidate(),
+	};
+}
+
+/**
+ * Classic: the block Pi draws for its own [skill] and [compaction] messages.
+ * Claude Code: a `⏺ headline` row without a background, the body under `⎿` when expanded.
+ */
 class SubagentMessageBlock extends Box {
 	private readonly source: SubagentMessage | SubagentEntry;
 	private readonly view: BlockView;
 	private readonly expandedByPi: boolean;
 	private readonly theme: Theme;
+	private readonly style: DisplayStyle;
 
-	constructor(source: SubagentMessage | SubagentEntry, view: BlockView, expandedByPi: boolean, theme: Theme) {
-		super(1, 1, (text) => theme.bg("customMessageBg", text));
+	constructor(source: SubagentMessage | SubagentEntry, view: BlockView, expandedByPi: boolean, theme: Theme, style: DisplayStyle = "classic") {
+		if (style === "claude-code") super(0, 0);
+		else super(1, 1, (text) => theme.bg("customMessageBg", text));
 		this.source = source;
 		this.view = view;
 		this.expandedByPi = expandedByPi;
 		this.theme = theme;
+		this.style = style;
 		const clicked = clickedBlocks.get(source);
 		if (clicked && clicked.expandedByPi !== expandedByPi) clickedBlocks.delete(source);
 		this.rebuild();
@@ -277,6 +305,33 @@ class SubagentMessageBlock extends Box {
 
 	private rebuild(): void {
 		const { theme, view } = this;
+		const content = this.style === "claude-code" ? this.claudeCodeContent() : this.classicContent();
+		this.clear();
+		this.addChild(new MouseRegion(content, (event) => {
+			if (event.type !== "click" || event.button !== "left") return undefined;
+			clickedBlocks.set(this.source, { expandedByPi: this.expandedByPi, expanded: !this.isExpanded() });
+			this.rebuild();
+			return { handled: true };
+		}));
+	}
+
+	private claudeCodeContent(): Container {
+		const { theme, view } = this;
+		const content = new Container();
+		const expanded = this.isExpanded();
+		const body = view.body.trim();
+		const title = `${theme.fg(headlineDotColor(view), BLACK_CIRCLE)} ${headlineText(view.headline, theme)}`;
+		const line = expanded || !body ? title : `${title} ${theme.fg("dim", `(${keyText("app.tools.expand") || "click"} to expand)`)}`;
+		content.addChild(new Spacer(1));
+		content.addChild({ render: (width) => [truncateToWidth(line, width, "…")], invalidate() {} });
+		if (expanded && body) {
+			content.addChild(resultGutter(new Markdown(safeTerminalText(view.body), 0, 0, getMarkdownTheme()), theme));
+		}
+		return content;
+	}
+
+	private classicContent(): Container {
+		const { theme, view } = this;
 		const content = new Container();
 		const title = `${theme.fg(KIND_LABEL_COLORS[view.kind], theme.bold("[subagent]"))} ${headlineText(view.headline, theme)}`;
 		const expanded = this.isExpanded();
@@ -286,22 +341,16 @@ class SubagentMessageBlock extends Box {
 			content.addChild(new Spacer(1));
 			content.addChild(new Markdown(safeTerminalText(view.body), 0, 0, getMarkdownTheme(), { color: (text) => theme.fg("customMessageText", text) }));
 		}
-		this.clear();
-		this.addChild(new MouseRegion(content, (event) => {
-			if (event.type !== "click" || event.button !== "left") return undefined;
-			clickedBlocks.set(this.source, { expandedByPi: this.expandedByPi, expanded: !this.isExpanded() });
-			this.rebuild();
-			return { handled: true };
-		}));
+		return content;
 	}
 }
 
-export function renderSubagentMessage(message: SubagentMessage, options: { expanded: boolean }, theme: Theme): Component | undefined {
+export function renderSubagentMessage(message: SubagentMessage, options: { expanded: boolean }, theme: Theme, style: DisplayStyle = "classic"): Component | undefined {
 	const view = MESSAGE_VIEWS.get(message.customType)?.(message);
-	return view ? new SubagentMessageBlock(message, view, options.expanded, theme) : undefined;
+	return view ? new SubagentMessageBlock(message, view, options.expanded, theme, style) : undefined;
 }
 
-export function renderSubagentEntry(entry: SubagentEntry, options: { expanded: boolean }, theme: Theme): Component | undefined {
+export function renderSubagentEntry(entry: SubagentEntry, options: { expanded: boolean }, theme: Theme, style: DisplayStyle = "classic"): Component | undefined {
 	const view = ENTRY_VIEWS.get(entry.customType)?.(entry);
-	return view ? new SubagentMessageBlock(entry, view, options.expanded, theme) : undefined;
+	return view ? new SubagentMessageBlock(entry, view, options.expanded, theme, style) : undefined;
 }

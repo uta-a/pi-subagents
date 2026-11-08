@@ -21,6 +21,7 @@ import { isStaleExtensionContextError, MODEL_ONLY_TOOL, withCachedUiContext } fr
 import { currentCompletionOwnerId } from "../shared/completion-owner.ts";
 import { cleanupOldChainDirs } from "../shared/settings.ts";
 import { clearLegacyResultAnimationTimer, renderSubagentResult, renderSubagentSummary, setInlineWorkflowCoverage } from "../tui/render.ts";
+import { renderCcSubagentCall, renderCcSubagentResult, resetBlink, resolveDisplayStyle } from "../tui/claude-code-style.ts";
 import { getInspectorPlugins, registerInspectorEventListener } from "../inspectors/plugins.ts";
 import { SubagentFleetStatus, resolveFleetViewPlacement } from "../tui/fleet-status.ts";
 import { readMainThinkingLevel, setMainThinkingLevelSource } from "../tui/running-tone.ts";
@@ -296,6 +297,9 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 	const asyncWidgetCollapsed = config.asyncWidgetCollapsed === true;
 	const asyncWidgetLayout = config.asyncWidgetLayout ?? "adaptive";
 	const summaryInlineToolDisplay = config.inlineToolDisplay === "summary";
+	const displayStyle = resolveDisplayStyle(config.displayStyle);
+	// An explicit summary display keeps its one-row result in either style.
+	const claudeCodeToolRow = displayStyle === "claude-code" && !summaryInlineToolDisplay;
 	const tempArtifactsDir = getArtifactsDir(null);
 	const artifactCleanupDays = config.artifactConfig?.cleanupDays ?? DEFAULT_ARTIFACT_CONFIG.cleanupDays;
 	cleanupAllArtifactDirs(artifactCleanupDays);
@@ -477,6 +481,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		widgetEnabled: asyncWidgetEnabled,
 		widgetCollapsed: asyncWidgetCollapsed,
 		widgetLayout: asyncWidgetLayout,
+		widgetStyle: displayStyle,
 		onJobTerminal: (job) => {
 			holdOwedResult(job);
 			refreshResultDelivery();
@@ -603,12 +608,12 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		modulePreloadTimer.unref?.();
 	};
 
-	for (const customType of SUBAGENT_MESSAGE_TYPES) pi.registerMessageRenderer(customType, renderSubagentMessage);
+	for (const customType of SUBAGENT_MESSAGE_TYPES) pi.registerMessageRenderer(customType, (message, options, theme) => renderSubagentMessage(message, options, theme, displayStyle));
 	const registerEntryRenderer = (pi as unknown as {
 		registerEntryRenderer?: (customType: string, renderer: (entry: { customType: string; data?: unknown }, options: { expanded: boolean }, theme: ExtensionContext["ui"]["theme"]) => Component | undefined) => void;
 	}).registerEntryRenderer;
 	if (typeof registerEntryRenderer === "function") {
-		for (const customType of SUBAGENT_ENTRY_TYPES) registerEntryRenderer.call(pi, customType, renderSubagentEntry);
+		for (const customType of SUBAGENT_ENTRY_TYPES) registerEntryRenderer.call(pi, customType, (entry, options, theme) => renderSubagentEntry(entry, options, theme, displayStyle));
 	}
 
 	pi.registerMessageRenderer<SlashMessageDetails>(SLASH_RESULT_TYPE, (message, options, theme) => {
@@ -759,7 +764,11 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 			return finalizeToolResult(await executeSubagentCollapsed(id, flattenSubagentToolOptions(params, disabledFeatures), signal ?? new AbortController().signal, onUpdate, ctx));
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
+			const preflight = args.options?.preflight ?? (args as { preflight?: unknown }).preflight;
+			if (claudeCodeToolRow) {
+				return renderCcSubagentCall(args, theme, context, args.workflow !== undefined && preflight !== undefined ? formatWorkflowPreflightCall(preflight) : undefined);
+			}
 			const gap = " ".repeat(config.mainWindowRenderer?.horizontalSpacing ?? 1);
 			const title = theme.fg("toolTitle", theme.bold("subagent"));
 			if (args.action) {
@@ -769,7 +778,6 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 					0, 0,
 				);
 			}
-			const preflight = args.options?.preflight ?? (args as { preflight?: unknown }).preflight;
 			if (args.workflow !== undefined)
 				return new Text(
 					`${title}${gap}${theme.fg("accent", args.workflow === true || args.workflow === "true" ? "workflow (reply block)" : `workflow ${String(args.workflow)}`)}${args.async === true ? `${gap}${theme.fg("warning", "[async]")}` : ""}${preflight !== undefined ? `${gap}${theme.fg("dim", formatWorkflowPreflightCall(preflight))}` : ""}`,
@@ -785,6 +793,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		},
 
 		renderResult(result, options, theme, context) {
+			if (claudeCodeToolRow) return renderCcSubagentResult({ ...result, isError: context.isError }, options, theme, context);
 			clearLegacyResultAnimationTimer(context);
 			const renderedResult = { ...result, isError: context.isError };
 			return summaryInlineToolDisplay
@@ -794,6 +803,8 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 
 	};
 
+	// The Claude Code row draws its own frame instead of Pi's boxed tool shell.
+	if (claudeCodeToolRow) tool.renderShell = "self";
 	registerPinnedTool(pi, tool);
 	// Declared with the same definition children use, so a fork's tool list equals this session's.
 	registerPinnedTool(pi, topLevelSupervisorTool());
@@ -1264,6 +1275,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		cancelCompactionResume();
 		completionNotifier.sessionShutdown(event?.reason);
 		parentWake.sessionShutdown(event?.reason);
+		resetBlink();
 		runtimeEntry.cleanup(event?.reason);
 		try {
 			await disposeChildSessionsForParent(parentSessionFile);

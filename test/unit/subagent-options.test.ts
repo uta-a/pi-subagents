@@ -115,8 +115,9 @@ describe("registered subagent tools with options", () => {
 			await assert.rejects(call({ workflow: true, options: { script: "return 1;" } }), /options\.script replaces workflow/);
 			await assert.rejects(call({ agent: "worker", task: "scan", options: { acceptance: "checked", timeoutMs: 3000000000 } }), /timeoutMs must be a positive integer no larger/);
 			const theme = { fg(_name, value) { return value; }, bold(value) { return value; } };
-			assert.match(tools.parent.renderCall({ workflow: true, options: { preflight: { version: 1, lanes: [] } } }, theme).text, /preflight/);
-			assert.match(tools.parent.renderCall({ workflow: true, preflight: { version: 1, lanes: [] } }, theme).text, /preflight/);
+			const callRow = (args) => tools.parent.renderCall(args, theme, { state: {}, isPartial: true }).render(200).join("\n");
+			assert.match(callRow({ workflow: true, options: { preflight: { version: 1, lanes: [] } } }), /preflight/);
+			assert.match(callRow({ workflow: true, preflight: { version: 1, lanes: [] } }), /preflight/);
 		`;
 		const env = { ...process.env };
 		delete env[SUBAGENT_CHILD_ENV];

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- pi-subagents now looks like Claude Code by default. The `subagent` tool row shows `⏺ agent(task)`, the latest tool uses under `⎿`, and `Done (N tool uses · tokens · time)` when finished. Parallel runs and workflows draw a `├─` tree with one branch per child. Chat notices and the async widget follow the same style. Set `displayStyle: "classic"` to keep the previous look. Only rendering changes.
+
 ### Fixed
 
 - A forked subagent (`context: "fork"`) launched in another folder than the parent session now gets that folder's `AGENTS.md` / `CLAUDE.md`. Before, it kept only the parent's project instructions, so a fork started in a repository worktree never saw the repository's `AGENTS.md`.
