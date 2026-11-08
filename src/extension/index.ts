@@ -20,7 +20,7 @@ import { getAgentDir } from "../shared/utils.ts";
 import { isStaleExtensionContextError, MODEL_ONLY_TOOL, withCachedUiContext } from "../shared/extension-context.ts";
 import { currentCompletionOwnerId } from "../shared/completion-owner.ts";
 import { cleanupOldChainDirs } from "../shared/settings.ts";
-import { clearLegacyResultAnimationTimer, renderSubagentResult, renderSubagentSummary, setInlineWorkflowCoverage } from "../tui/render.ts";
+import { clearLegacyResultAnimationTimer, renderSubagentResult, renderSubagentSummary, setFleetRosterActive, setInlineWorkflowCoverage } from "../tui/render.ts";
 import { renderCcSubagentCall, renderCcSubagentResult, resetBlink, resolveDisplayStyle } from "../tui/claude-code-style.ts";
 import { getInspectorPlugins, registerInspectorEventListener } from "../inspectors/plugins.ts";
 import { SubagentFleetStatus, resolveFleetViewPlacement } from "../tui/fleet-status.ts";
@@ -385,7 +385,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 				}
 				throw error;
 			}
-		}, { placement: fleetViewPlacement, onWorkflowCoverageChange: setInlineWorkflowCoverage })
+		}, { placement: fleetViewPlacement, onWorkflowCoverageChange: setInlineWorkflowCoverage, onRosterActiveChange: setFleetRosterActive })
 		: undefined;
 	let goalTurnId = 0;
 	let releaseHostSessionLiveness = () => {};

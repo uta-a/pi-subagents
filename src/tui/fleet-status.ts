@@ -99,6 +99,8 @@ export interface FleetStatusOptions {
 	maxAgentRows?: number;
 	placement?: FleetViewPlacement;
 	onWorkflowCoverageChange?: (ui: ExtensionContext["ui"], coverage: ReadonlyMap<string, string>) => void;
+	/** Called when the roster opens (↓/←) or closes. */
+	onRosterActiveChange?: (ui: ExtensionContext["ui"], active: boolean) => void;
 }
 
 export function resolveFleetViewPlacement(value: unknown): FleetViewPlacement {
@@ -552,6 +554,8 @@ export class SubagentFleetStatus {
 	private entries: FleetStatusEntry[] = [];
 	private workflowSnapshots = new Map<string, { snapshot: string; childRows: Set<string> }>();
 	private readonly onWorkflowCoverageChange: FleetStatusOptions["onWorkflowCoverageChange"];
+	private readonly onRosterActiveChange: FleetStatusOptions["onRosterActiveChange"];
+	private rosterReportedUi: ExtensionContext["ui"] | undefined;
 	private readonly state: SubagentState;
 	private readonly openInspector: (itemKey: string) => Promise<void> | void;
 	private readonly refreshMs: number;
@@ -569,6 +573,7 @@ export class SubagentFleetStatus {
 		this.maxAgentRows = options.maxAgentRows ?? MAX_AGENT_ROWS;
 		this.placement = options.placement ?? "belowEditor";
 		this.onWorkflowCoverageChange = options.onWorkflowCoverageChange;
+		this.onRosterActiveChange = options.onRosterActiveChange;
 	}
 
 	setContext(ctx: ExtensionContext): void {
@@ -667,6 +672,7 @@ export class SubagentFleetStatus {
 		}
 		if (!this.hasInlineSurface()) {
 			this.active = false;
+			this.syncRosterActive();
 			this.selectedKey = "main";
 			this.lastRenderKey = "";
 			this.clearWidget();
@@ -736,6 +742,7 @@ export class SubagentFleetStatus {
 			const activates = matchesKey(data, "down") || matchesKey(data, "left");
 			if (!activates || ctx.ui.getEditorText() !== "") return undefined;
 			this.active = true;
+			this.syncRosterActive();
 			this.selectedKey = "main";
 			this.refresh();
 			return { consume: true };
@@ -987,6 +994,7 @@ export class SubagentFleetStatus {
 
 	private deactivate(): void {
 		this.active = false;
+		this.syncRosterActive();
 		this.selectedKey = "main";
 		this.refresh();
 	}
@@ -1100,8 +1108,18 @@ export class SubagentFleetStatus {
 		this.tui = undefined;
 	}
 
+	private syncRosterActive(): void {
+		const ui = this.active ? this.ui : undefined;
+		if (ui === this.rosterReportedUi) return;
+		if (this.rosterReportedUi) this.onRosterActiveChange?.(this.rosterReportedUi, false);
+		this.rosterReportedUi = ui;
+		if (ui) this.onRosterActiveChange?.(ui, true);
+	}
+
 	private clearUiRegistration(): void {
 		this.prepaint = undefined;
+		if (this.rosterReportedUi) this.onRosterActiveChange?.(this.rosterReportedUi, false);
+		this.rosterReportedUi = undefined;
 		this.clearWorkflowCoverage();
 		if (this.timer) clearInterval(this.timer);
 		this.timer = undefined;

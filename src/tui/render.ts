@@ -2958,6 +2958,16 @@ export function inlineWorkflowRenderKey(job: AsyncJobState, children: AsyncJobSt
 }
 
 /** Presentation-only coverage from the mounted inline Fleet roster, never configuration. */
+const fleetRosterActive = new WeakSet<ExtensionContext["ui"]>();
+
+/** While the FleetView roster is open it lists every run, so the claude-code widget steps aside. */
+export function setFleetRosterActive(ui: ExtensionContext["ui"], active: boolean): void {
+	if (fleetRosterActive.has(ui) === active) return;
+	if (active) fleetRosterActive.add(ui);
+	else fleetRosterActive.delete(ui);
+	asyncWidgetInvalidations.get(ui)?.();
+}
+
 export function setInlineWorkflowCoverage(ui: ExtensionContext["ui"], coverage: ReadonlyMap<string, string>): void {
 	const previous = inlineWorkflowCoverage.get(ui);
 	if ((previous?.size ?? 0) === coverage.size && [...coverage].every(([id, key]) => previous?.get(id) === key)) return;
@@ -3117,6 +3127,7 @@ function buildWidgetComponent(jobs: AsyncJobState[], ui: ExtensionContext["ui"],
 			trackSubagentsRound(ui, jobs, now);
 			const expanded = ui.getToolsExpanded?.() ?? false;
 			if (style === "claude-code") {
+				if (fleetRosterActive.has(ui)) return [];
 				if (cachedLines && cachedRenderWidth === renderWidth && cachedFrame === frame && cachedExpanded === expanded) return cachedLines;
 				const { roots, projectionFor } = widgetJobTree(jobs, now);
 				const entries = orderedWidgetJobs(roots).map((job) => ccWidgetEntry(job, projectionFor, now));

@@ -20,7 +20,7 @@ import {
 	type WidgetEntry,
 } from "../../src/tui/claude-code-style.ts";
 import { renderSubagentMessage } from "../../src/tui/subagent-messages.ts";
-import { renderWidget } from "../../src/tui/render.ts";
+import { renderWidget, setFleetRosterActive } from "../../src/tui/render.ts";
 import type { AsyncJobState } from "../../src/shared/types.ts";
 
 // Message bodies read Pi's markdown theme.
@@ -326,6 +326,23 @@ describe("claude-code async widget", () => {
 		const lines = widget!.render(100).map((line) => line.trim());
 		assert.match(lines[0]!, /^(⏺ )?scout\(Find auth\) · 2 tool uses/);
 		assert.match(lines[1]!, /^⎿ {2}Read\(/);
+		renderWidget(ctx as never, []);
+	});
+
+	it("hides while the FleetView roster is open so the runs are not listed twice", () => {
+		let widget: { render(width: number): string[] } | undefined;
+		let renders = 0;
+		const ui = { getToolsExpanded: () => false, setWidget: (_key: string, factory: ((tui: unknown, theme: unknown) => typeof widget) | undefined) => { widget = factory?.({ requestRender() { renders++; } }, plainTheme); } };
+		const ctx = { hasUI: true, mode: "tui", ui };
+		const jobs: AsyncJobState[] = [{ asyncId: "run-f", asyncDir: "/tmp/run-f", status: "running", mode: "single", agents: ["scout"], description: "Find auth" }];
+		renderWidget(ctx as never, []);
+		renderWidget(ctx as never, jobs, false, "adaptive", "claude-code");
+		assert.ok(widget!.render(100).length > 0);
+		setFleetRosterActive(ui as never, true);
+		assert.ok(renders > 0, "opening the roster repaints the widget");
+		assert.deepEqual(widget!.render(100), []);
+		setFleetRosterActive(ui as never, false);
+		assert.match(widget!.render(100)[0]!.trim(), /scout\(Find auth\)/);
 		renderWidget(ctx as never, []);
 	});
 });
